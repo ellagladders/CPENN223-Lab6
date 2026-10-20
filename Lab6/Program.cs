@@ -1,6 +1,6 @@
 ﻿// Lab 6
-// Student name:
-// Student number:
+// Student name: Ella Gladders
+// Student number: 78754249
 
 using System;
 using System.Collections.Generic;
@@ -22,9 +22,81 @@ Dictionary<string, Dictionary<string, double>> scaffold = new()
 //(and ShortestPath, if you attempt the optional challenge).
 //Compare finite distances using a small tolerance, and check unreachable
 //vertices with double.IsPositiveInfinity.
-//TODO
-//
-//
+
+// small rounding diff when comparing double vals
+double tolerance = 1e-9;
+
+// test the example graph from the handout
+Dictionary<string,double> fromA = GraphLibrary.ShortestDistancesFrom(scaffold, "A");
+
+Console.WriteLine( $"One entry per vertex: {fromA.Count == scaffold.Count} (expected True)");
+
+Console.WriteLine($"A distance: {Math.Abs(fromA["A"] - 0.0) < tolerance} (expected True)");
+
+Console.WriteLine($"B distance: {Math.Abs(fromA["B"] - 2.0) < tolerance} (expected True)");
+
+// A -> B -> C costs 3, which is cheaper than the direct edge costing 5
+Console.WriteLine($"C distance: {Math.Abs(fromA["C"] - 3.0) < tolerance} (expected True)");
+
+// D is first discovered with cost 6, then improved to 4.5 through C.
+// This also exercises the handling of duplicate queue entries.
+Console.WriteLine($"D distance: {Math.Abs(fromA["D"] - 4.5) < tolerance} (expected True)");
+
+Console.WriteLine($"E distance: {Math.Abs(fromA["E"] - 7.5) < tolerance} (expected True)");
+
+// F has no connections, so it cannot be reached from A.
+Console.WriteLine($"F unreachable: {double.IsPositiveInfinity(fromA["F"])} (expected True)");
+
+
+// Test starting at the isolated vertex F.
+Dictionary<string, double> fromF =
+    GraphLibrary.ShortestDistancesFrom(scaffold, "F");
+
+Console.WriteLine($"Isolated source distance: {Math.Abs(fromF["F"]) < tolerance} (expected True)");
+
+bool othersUnreachable = true;
+
+foreach (string vertex in scaffold.Keys)
+{
+    if (vertex != "F" && !double.IsPositiveInfinity(fromF[vertex]))
+    {
+        othersUnreachable = false;
+    }
+}
+
+Console.WriteLine($"Other vertices unreachable from F: {othersUnreachable} (expected True)");
+
+// Test a zero cost edge and a cheaper indirect route.
+Dictionary<string, Dictionary<string, double>> zeroCostGraph = new()
+{
+    ["X"] = new() { ["Y"] = 0.0, ["Z"] = 5.0 },
+    ["Y"] = new() { ["X"] = 0.0, ["Z"] = 2.0 },
+    ["Z"] = new() { ["X"] = 5.0, ["Y"] = 2.0 }
+};
+
+Dictionary<string, double> fromX =
+    GraphLibrary.ShortestDistancesFrom(zeroCostGraph, "X");
+
+Console.WriteLine($"Zero-cost edge: {Math.Abs(fromX["Y"]) < tolerance} (expected True)");
+
+// X -> Y -> Z costs 0 + 2 = 2, compared with 5 directly
+Console.WriteLine($"Cheaper indirect route: {Math.Abs(fromX["Z"] - 2.0) < tolerance} (expected True)");
+
+// Test that a missing source throws the required exception.
+bool missingSourceThrows = false;
+
+try
+{
+    GraphLibrary.ShortestDistancesFrom(scaffold, "Missing");
+}
+catch (ArgumentException)
+{
+    missingSourceThrows = true;
+}
+
+Console.WriteLine($"Missing source throws: {missingSourceThrows} (expected True)");
+
+
 //end Testing code
 
 //Do not change the program skeleton: keep the class name, method names,
@@ -71,8 +143,62 @@ public static class GraphLibrary
         IReadOnlyDictionary<string, Dictionary<string, double>> graph,
         string source)
     {
-        //TODO
-        throw new NotImplementedException();
+        // checks starting vertex exists in graph
+        if (!graph.ContainsKey(source))
+        {
+            throw new ArgumentException("Source must be a vertex in the graph,", nameof(source)); 
+        }
+
+        // store the best distance found so far for each vertex. 
+        Dictionary<string, double> distances = new(); 
+
+        foreach (string vertex in graph.Keys)
+        {
+            distances[vertex] = double.PositiveInfinity; 
+        }
+
+        // reaching starting vertex has cost 0 
+        distances[source] = 0.0; 
+
+        // queue processes the vertex with smallest distance first
+        PriorityQueue<string, double> work = new(); 
+        work.Enqueue(source, 0.0); 
+
+        // finalized vertex already has its min distance 
+        HashSet<string> finalized = new(); 
+
+        while (work.Count >0)
+        {
+            string current = work.Dequeue(); 
+
+            // a vertex can appear in queue more than once, skip it if we have already finalized it
+            if (finalized.Contains(current))
+            {
+                continue;
+            }
+
+            finalized.Add(current); 
+
+            // check every edge leaving current vertex 
+            foreach (KeyValuePair<string, double> edge in graph[current])
+            {
+                string neighbor = edge.Key; 
+                double cost = edge.Value; 
+
+                // cost of reaching neighbor thorugh current 
+                double candidateDist = distances[current] + cost; 
+
+                // only update the neighbour if this route is cheaper 
+                if (candidateDist < distances[neighbor])
+                {
+                    distances[neighbor] = candidateDist; 
+                    work.Enqueue(neighbor, candidateDist);
+                }
+            }
+        }
+
+        return distances;
+
     }
 
 
